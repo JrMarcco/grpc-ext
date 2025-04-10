@@ -25,12 +25,6 @@ func (b *Builder) PeerInfo(ctx context.Context) *PeerInfo {
 		return &PeerInfo{}
 	}
 
-	// Cache metadata once
-	var ok bool
-	if b.md, ok = metadata.FromIncomingContext(ctx); !ok {
-		b.md = metadata.New(map[string]string{})
-	}
-
 	return &PeerInfo{
 		Name: b.PeerName(ctx),
 		IP:   b.PeerIP(ctx),
@@ -39,13 +33,13 @@ func (b *Builder) PeerInfo(ctx context.Context) *PeerInfo {
 
 // PeerName extracts the peer name from the context headers
 func (b *Builder) PeerName(ctx context.Context) string {
-	return b.grpcHeaderVal("x-peer-name")
+	return b.grpcHeaderVal(ctx, "x-peer-name")
 }
 
 // PeerIP extracts the peer IP from the context headers or connection
 func (b *Builder) PeerIP(ctx context.Context) string {
 	// First try to get IP from custom header
-	if clientIP := b.grpcHeaderVal("x-client-ip"); clientIP != "" {
+	if clientIP := b.grpcHeaderVal(ctx, "x-client-ip"); clientIP != "" {
 		if net.ParseIP(clientIP) != nil {
 			return clientIP
 		}
@@ -72,8 +66,16 @@ func (b *Builder) PeerIP(ctx context.Context) string {
 }
 
 // grpcHeaderVal extracts a value from gRPC metadata headers
-func (b *Builder) grpcHeaderVal(key string) string {
-	if key == "" || b.md == nil {
+func (b *Builder) grpcHeaderVal(ctx context.Context, key string) string {
+	if b.md == nil {
+		// Cache metadata once
+		var ok bool
+		if b.md, ok = metadata.FromIncomingContext(ctx); !ok {
+			b.md = metadata.New(map[string]string{})
+		}
+	}
+
+	if ctx == nil || key == "" {
 		return ""
 	}
 
